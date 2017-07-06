@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html><head><style>
+* {margin: 0;  padding: 0; border: none;}
+body, html {height:100%;}
+#theCanvas { border: none; position:absolute; width:100%;height:100%;}
+</style></head>
+
+<body onload="webGLStart();"><canvas id="theCanvas"></canvas>
+<script type="text/javascript">
+
+    //BEGIN CONFIG
+    const flashesPerSecondBase = 10;
+    const flashesPerSecondMin = 0.5;
+    const flashesPerSecondMax = 30;
+    const mouseTolerance = 3;
+    const color1 = [0.005,0.005,0.005];
+    const color2 = [1,1,1];
+    //END CONFIG
+
+    const requestAnimationFrame = window.requestAnimationFrame;
+    const currentTimeMillis = () => performance.now();
+
+    let flashesPerSecond = () => flashesPerSecondBase;
+    const flashChangesPerSecond = ()=>flashesPerSecond()*2;
+    const flashChangesPerMillisecond = ()=>flashChangesPerSecond()/1000;
+    const flashChangeDurationMilliseconds = () => 1/flashChangesPerMillisecond();
+    
+    let toggle = false;
+    let nextChangeTime = currentTimeMillis();
+    
+    const getFlashColor = () => {
+        let currentTime = currentTimeMillis();
+        if(currentTime >= nextChangeTime){
+            let inc = flashChangeDurationMilliseconds();
+            let missedFrames = Math.floor((currentTime-nextChangeTime)/inc);
+            
+            nextChangeTime += (missedFrames+1)*inc;
+            toggle = !toggle;
+        }
+        
+        return toggle ? color1 : color2;
+    }
+    
+    let gl;
+    let currentColor = [0,0,0];
+    
+    setupMouseHandlers();
+    
+    function setupMouseHandlers(){
+    
+        let lastLeftMouseDownPos = null;
+        
+        const sumToFlashesPerSecond = (sum) => sum/1000;
+        const flashesPerSecondToSum = (fps) => fps*1000;
+    
+        let moveSumBase = flashesPerSecondToSum(flashesPerSecondBase);
+        let moveSum = moveSumBase;
+    
+        const refreshTitle = () => document.title = ""+sumToFlashesPerSecond(moveSum).toFixed(3)+" flashes per second";
+        refreshTitle();
+    
+        const canvas = document.getElementById("theCanvas");
+    
+        canvas.onmousedown = (evt) => {
+            if(evt.buttons % 2 > 0){
+                lastLeftMouseDownPos = {x: evt.offsetX, y: evt.offsetY};
+                moveSumBase = moveSum;
+                flashesPerSecond = () => sumToFlashesPerSecond(moveSum);
+            }
+        }
+        
+        canvas.onmouseup = (evt) => {
+            if(evt.buttons % 2 == 0){
+                lastLeftMouseDownPos = null;
+            }
+        }
+        
+        canvas.onmousemove = (evt) => {
+            let evtPrev = lastLeftMouseDownPos;
+            if(evtPrev != null){
+                let delta = floorTowardsZero((evt.offsetY - evtPrev.y)/mouseTolerance);
+                let fine = evt.shiftKey;
+                if(!fine){
+                    delta = 100*delta;
+                }
+                moveSum = moveSumBase-delta
+                if(!fine){
+                    moveSum = 100*Math.floor(moveSum/100);
+                }
+                
+                moveSum = Math.min(moveSum, flashesPerSecondToSum(flashesPerSecondMax));
+                moveSum = Math.max(moveSum, flashesPerSecondToSum(flashesPerSecondMin));
+                
+                refreshTitle();
+            }
+        }
+    }
+    
+    function floorTowardsZero(value){
+        return Math.floor(Math.abs(value))*(value>0 ? 1 : -1);
+    }
+    
+    function animate() {
+        currentColor = getFlashColor();
+    }
+
+    function drawScene() {
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight); 
+        gl.clearColor(currentColor[0], currentColor[1], currentColor[2], 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    
+    function tick() {
+        requestAnimationFrame(tick); animate(); drawScene();
+    }
+    
+    function initGL(canvas) {
+        try { gl = canvas.getContext("webgl"); gl.viewportWidth = canvas.width; gl.viewportHeight = canvas.height; } catch (e) { } if (!gl) { alert("Could not initialise WebGL, sorry :-("); }
+    }
+    
+    function webGLStart() {
+        let canvas = document.getElementById("theCanvas"); initGL(canvas); gl.clearColor(0.0, 0.0, 0.0, 1.0); tick();
+    }
+</script>
+
+</body></html>
